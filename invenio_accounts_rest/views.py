@@ -26,9 +26,58 @@
 
 from __future__ import absolute_import, print_function
 
-from flask import Blueprint
+import json
 
-blueprint = Blueprint(
-    'invenio_accounts_rest',
-    __name__,
-)
+from flask import Blueprint, request
+from invenio_accounts.models import User
+from invenio_oauth2server import require_api_auth
+from invenio_rest import ContentNegotiatedMethodView
+from sqlalchemy import String, cast
+
+
+def accounts_serializer(*args, **kwargs):
+    """Basic serializer for invenio_accounts.models.User data."""
+    return json.dumps([{'id': u.id, 'email': u.email} for u in args])
+
+
+def create_blueprint():
+    """Create invenio-accounts REST blueprint."""
+    blueprint = Blueprint(
+        'invenio_accounts_rest',
+        __name__,
+    )
+
+    accounts_resource = AccountsResource.as_view(
+        'accounts_resource',
+        serializers={'application/json': accounts_serializer},
+        default_media_type='application/json'
+    )
+
+    blueprint.add_url_rule(
+        '/users/',
+        view_func=accounts_resource,
+        methods=['GET'],
+    )
+
+    return blueprint
+
+
+class AccountsResource(ContentNegotiatedMethodView):
+    """MethodView implementation."""
+
+    def __init__(self, serializers, default_media_type):
+        """Constructor."""
+        super(AccountsResource, self).__init__(
+            serializers, default_media_type=default_media_type)
+
+    @require_api_auth()
+    def get(self):
+        """Get accounts/users/?q=."""
+        query = request.args.get('q')
+        if query:
+            return User.query.filter(
+                (User.email.like(query)) |
+                (cast(User.id, String) == query)
+            ).all()
+        else:
+            return User.query.all()

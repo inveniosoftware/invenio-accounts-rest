@@ -26,6 +26,8 @@
 
 from __future__ import absolute_import, print_function
 
+from .views import create_blueprint
+
 
 class InvenioAccountsREST(object):
     """Invenio-Accounts-REST extension."""
@@ -38,6 +40,7 @@ class InvenioAccountsREST(object):
     def init_app(self, app):
         """Flask application initialization."""
         self.init_config(app)
+        app.register_blueprint(create_blueprint())
         app.extensions['invenio-accounts-rest'] = self
 
     def init_config(self, app):
