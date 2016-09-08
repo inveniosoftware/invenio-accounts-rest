@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 #
 # This file is part of Invenio.
-# Copyright (C) 2016 CERN.
+# Copyright (C) 2016, 2017 CERN.
 #
 # Invenio is free software; you can redistribute it
 # and/or modify it under the terms of the GNU General Public License as
@@ -27,3 +27,6 @@
 #
 #     -e git+git://github.com/mitsuhiko/werkzeug.git#egg=Werkzeug
 #     -e git+git://github.com/mitsuhiko/jinja2.git#egg=Jinja2
+
+-e git+git://github.com/inveniosoftware/invenio-userprofiles.git#egg=invenio-userprofiles
+-e git+git://github.com/inveniosoftware/invenio-rest.git#egg=invenio-rest

@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 #
 # This file is part of Invenio.
-# Copyright (C) 2016, 2017 CERN.
+# Copyright (C) 2017 CERN.
 #
 # Invenio is free software; you can redistribute it
 # and/or modify it under the terms of the GNU General Public License as
@@ -22,38 +22,27 @@
 # waive the privileges and immunities granted to it by virtue of its status
 # as an Intergovernmental Organization or submit itself to any jurisdiction.
 
+"""Invenio accounts REST errors."""
 
-"""Module tests."""
-
-from __future__ import absolute_import, print_function
-
-from flask import Flask
-from flask_babelex import Babel
-
-from invenio_accounts_rest import InvenioAccountsREST
-from invenio_accounts_rest.views import blueprint
+from invenio_rest.errors import RESTException
 
 
-def test_version():
-    """Test version import."""
-    from invenio_accounts_rest import __version__
-    assert __version__
+class MaxResultWindowRESTError(RESTException):
+    """Maximum number of results passed."""
+
+    code = 400
+    description = 'Maximum number of results have been reached.'
 
 
-def test_init():
-    """Test extension initialization."""
-    app = Flask('testapp')
-    ext = InvenioAccountsREST(app)
-    assert 'invenio-accounts-rest' in app.extensions
+class PatchJSONFailureRESTError(RESTException):
+    """Failed to patch JSON."""
 
-    app = Flask('testapp')
-    ext = InvenioAccountsREST()
-    assert 'invenio-accounts-rest' not in app.extensions
-    ext.init_app(app)
-    assert 'invenio-accounts-rest' in app.extensions
+    code = 400
+    description = 'Could not patch JSON.'
 
 
-def test_view(app):
-    """Test view."""
-    InvenioAccountsREST(app)
-    app.register_blueprint(blueprint)
+class MissingOldPasswordError(RESTException):
+    """Old password not provided while trying to change user password."""
+
+    code = 400
+    description = 'Missing field old_password.'
