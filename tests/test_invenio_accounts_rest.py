@@ -31,6 +31,7 @@ from flask import Flask
 from flask_babelex import Babel
 
 from invenio_accounts_rest import InvenioAccountsREST
+from invenio_accounts_rest.views import blueprint
 
 
 def test_version():
@@ -40,7 +41,7 @@ def test_version():
 
 
 def test_init():
-    """Test extension initialization."""
+    """Test edxtension initialization."""
     app = Flask('testapp')
     ext = InvenioAccountsREST(app)
     assert 'invenio-accounts-rest' in app.extensions
@@ -50,3 +51,9 @@ def test_init():
     assert 'invenio-accounts-rest' not in app.extensions
     ext.init_app(app)
     assert 'invenio-accounts-rest' in app.extensions
+
+
+def test_view(app):
+    """Test view."""
+    InvenioAccountsREST(app)
+    app.register_blueprint(blueprint)

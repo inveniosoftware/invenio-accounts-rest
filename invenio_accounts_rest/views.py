@@ -26,49 +26,266 @@
 
 from __future__ import absolute_import, print_function
 
-import json
-
-from flask import Blueprint, request
+from flask import Blueprint, jsonify, request
 from invenio_accounts.models import User
 from invenio_oauth2server import require_api_auth
 from invenio_rest import ContentNegotiatedMethodView
 from sqlalchemy import String, cast
 
+from invenio_accounts_rest.serializers import accounts_serializer
 
-def accounts_serializer(*args, **kwargs):
-    """Basic serializer for invenio_accounts.models.User data."""
-    return json.dumps([{'id': u.id, 'email': u.email} for u in args])
+blueprint = Blueprint(
+    'invenio_accounts_rest',
+    __name__,
+)
 
 
-def create_blueprint():
-    """Create invenio-accounts REST blueprint."""
-    blueprint = Blueprint(
-        'invenio_accounts_rest',
-        __name__,
-    )
+def dummy_serializer(data, *args, **kwargs):
+    """Mock serializer."""
+    if data is not None:
+        response = jsonify(data['data'])
+        response.status_code = data['code']
+    else:
+        response = None
+        response.status_code = args[0]
+    return response
 
-    accounts_resource = AccountsResource.as_view(
-        'accounts_resource',
-        serializers={'application/json': accounts_serializer},
-        default_media_type='application/json'
-    )
 
-    blueprint.add_url_rule(
-        '/users/',
-        view_func=accounts_resource,
-        methods=['GET'],
-    )
+class ListRolesResource(ContentNegotiatedMethodView):
+    """."""
 
-    return blueprint
+    view_name = 'list_roles'
+
+    def __init__(self, **kwargs):
+        """Constructor."""
+        super(ListRolesResource, self).__init__(
+            serializers={
+                'application/json': dummy_serializer
+            },
+            default_media_type='application/json',
+            **kwargs
+        )
+
+    def get(self):
+        """."""
+        pass
+
+    def post(self):
+        """."""
+        pass
+
+
+class RoleResource(ContentNegotiatedMethodView):
+    """."""
+
+    view_name = 'role'
+
+    def __init__(self, **kwargs):
+        """Constructor."""
+        super(RoleResource, self).__init__(
+            serializers={
+                'application/json': dummy_serializer,
+                'application/json-patch+json': dummy_serializer,
+            },
+            default_media_type='application/json',
+            **kwargs
+        )
+
+    def get(self, role_id):
+        """."""
+        pass
+
+    def patch(self, role_id):
+        """."""
+        pass
+
+    def post(self):
+        """."""
+        pass
+
+    def delete(self, role_id):
+        """."""
+        pass
+
+
+class AssignRoleResource(ContentNegotiatedMethodView):
+    """."""
+
+    view_name = 'assign_role'
+
+    def __init__(self, **kwargs):
+        """Constructor."""
+        super(AssignRoleResource, self).__init__(
+            serializers={
+                'application/json': dummy_serializer
+            },
+            default_media_type='application/json',
+            **kwargs
+        )
+
+    def put(self, user_id, role_id):
+        """."""
+        pass
+
+
+class UnassignRoleResource(ContentNegotiatedMethodView):
+    """."""
+
+    view_name = 'unassign_role'
+
+    def __init__(self, **kwargs):
+        """Constructor."""
+        super(UnassignRoleResource, self).__init__(
+            serializers={
+                'application/json': dummy_serializer
+            },
+            default_media_type='application/json',
+            **kwargs
+        )
+
+    def delete(self, user_id, role_id):
+        """."""
+        pass
+
+
+class UserRolesListResource(ContentNegotiatedMethodView):
+    """."""
+
+    view_name = 'user_roles_list'
+
+    def __init__(self, **kwargs):
+        """Constructor."""
+        super(UserRolesListResource, self).__init__(
+            serializers={
+                'application/json': dummy_serializer
+            },
+            default_media_type='application/json',
+            **kwargs
+        )
+
+    def get(self, user_id):
+        """."""
+        pass
+
+
+class UserPropertiesListResource(ContentNegotiatedMethodView):
+    """."""
+
+    view_name = 'user_properties_list'
+
+    def __init__(self, **kwargs):
+        """Constructor."""
+        super(UserPropertiesListResource, self).__init__(
+            serializers={
+                'application/json': dummy_serializer,
+                'application/json-patch+json': dummy_serializer
+            },
+            default_media_type='application/json',
+            **kwargs
+        )
+
+    def patch(self, user_id):
+        """."""
+        pass
+
+    def get(self, user_id):
+        """."""
+        pass
+
+
+class UserProfilePropertiesListResource(ContentNegotiatedMethodView):
+    """."""
+
+    view_name = 'user_profile_properties_list'
+
+    def __init__(self, **kwargs):
+        """Constructor."""
+        super(UserProfilePropertiesListResource, self).__init__(
+            serializers={
+                'application/json': dummy_serializer,
+                'application/json-patch+json': dummy_serializer
+            },
+            default_media_type='application/json',
+            **kwargs
+        )
+
+    def patch(self, user_id):
+        """."""
+        pass
+
+
+class UserListResource(ContentNegotiatedMethodView):
+    """."""
+
+    view_name = 'users_list'
+
+    def __init__(self, **kwargs):
+        """Constructor."""
+        super(UserListResource, self).__init__(
+            serializers={
+                'application/json': dummy_serializer
+            },
+            default_media_type='application/json',
+            **kwargs
+        )
+
+    def get(self):
+        """."""
+        pass
+
+
+class DeactivateUserResource(ContentNegotiatedMethodView):
+    """."""
+
+    view_name = 'deactivate_user'
+
+    def __init__(self, **kwargs):
+        """Constructor."""
+        super(DeactivateUserResource, self).__init__(
+            serializers={
+                'application/json': dummy_serializer
+            },
+            default_media_type='application/json',
+            **kwargs
+        )
+
+    def put(self, user_id):
+        """."""
+        pass
+
+
+class ReactivateUserResource(ContentNegotiatedMethodView):
+    """."""
+
+    view_name = 'reactivate_user'
+
+    def __init__(self, **kwargs):
+        """Constructor."""
+        super(ReactivateUserResource, self).__init__(
+            serializers={
+                'application/json': dummy_serializer
+            },
+            default_media_type='application/json',
+            **kwargs
+        )
+
+    def put(self, user_id):
+        """."""
+        pass
 
 
 class AccountsResource(ContentNegotiatedMethodView):
     """MethodView implementation."""
 
-    def __init__(self, serializers, default_media_type):
+    view_name = 'accounts_resource'
+
+    def __init__(self, **kwargs):
         """Constructor."""
         super(AccountsResource, self).__init__(
-            serializers, default_media_type=default_media_type)
+            serializers={'application/json': accounts_serializer},
+            default_media_type='application/json',
+            **kwargs
+        )
 
     @require_api_auth()
     def get(self):
@@ -81,3 +298,91 @@ class AccountsResource(ContentNegotiatedMethodView):
             ).all()
         else:
             return User.query.all()
+
+
+blueprint.add_url_rule(
+    '/roles',
+    view_func=ListRolesResource.as_view(
+        ListRolesResource.view_name
+    )
+)
+
+blueprint.add_url_rule(
+    '/roles/<string:role_id>',
+    view_func=RoleResource.as_view(
+        RoleResource.view_name
+    )
+)
+
+
+blueprint.add_url_rule(
+    '/roles/<string:role_id>/users/<string:user_id>',
+    view_func=AssignRoleResource.as_view(
+        AssignRoleResource.view_name
+    )
+)
+
+
+blueprint.add_url_rule(
+    '/roles/<string:role_id>/users/<string:user_id>',
+    view_func=UnassignRoleResource.as_view(
+        UnassignRoleResource.view_name
+    )
+)
+
+
+blueprint.add_url_rule(
+    '/users/<string:user_id>/roles',
+    view_func=UserRolesListResource.as_view(
+        UserRolesListResource.view_name
+    )
+)
+
+
+blueprint.add_url_rule(
+    '/users/<string:user_id>',
+    view_func=UserPropertiesListResource.as_view(
+        UserPropertiesListResource.view_name
+    )
+)
+
+
+blueprint.add_url_rule(
+    '/users/<string:user_id>/profile_properties',
+    view_func=UserProfilePropertiesListResource.as_view(
+        UserProfilePropertiesListResource.view_name
+    )
+)
+
+
+blueprint.add_url_rule(
+    '/users',
+    view_func=UserListResource.as_view(
+        UserListResource.view_name
+    )
+)
+
+
+blueprint.add_url_rule(
+    '/user/deactivate/<string:user_id>',
+    view_func=DeactivateUserResource.as_view(
+        DeactivateUserResource.view_name
+    )
+)
+
+
+blueprint.add_url_rule(
+    '/user/reactivate/<string:user_id>',
+    view_func=ReactivateUserResource.as_view(
+        ReactivateUserResource.view_name
+    )
+)
+
+
+blueprint.add_url_rule(
+    '/users/',
+    view_func=AccountsResource.as_view(
+        AccountsResource.view_name
+    ),
+    methods=['GET'],
+)
