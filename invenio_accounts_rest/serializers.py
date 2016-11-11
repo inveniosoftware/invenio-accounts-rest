@@ -22,27 +22,11 @@
 # waive the privileges and immunities granted to it by virtue of its status
 # as an Intergovernmental Organization or submit itself to any jurisdiction.
 
-"""Invenio modules that adds accounts REST API."""
+"""Invenio accounts REST module's serializers."""
 
-from __future__ import absolute_import, print_function
-
-from .views import blueprint
+import json
 
 
-class InvenioAccountsREST(object):
-    """Invenio-Accounts-REST extension."""
-
-    def __init__(self, app=None):
-        """Extension initialization."""
-        if app:
-            self.init_app(app)
-
-    def init_app(self, app):
-        """Flask application initialization."""
-        self.init_config(app)
-        app.register_blueprint(blueprint)
-        app.extensions['invenio-accounts-rest'] = self
-
-    def init_config(self, app):
-        """Initialize configuration."""
-        # TODO import config
+def accounts_serializer(*args, **kwargs):
+    """Basic serializer for invenio_accounts.models.User data."""
+    return json.dumps([{'id': u.id, 'email': u.email} for u in args])

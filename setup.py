@@ -40,6 +40,9 @@ tests_require = [
     'pytest-cov>=1.8.0',
     'pytest-pep8>=1.0.6',
     'pytest>=2.8.0',
+    'Flask-Testing',
+    'mock',
+    'responses>=0.5.1',
 ]
 
 extras_require = {
@@ -60,9 +63,12 @@ setup_requires = [
 
 install_requires = [
     'Flask-BabelEx>=0.9.2',
-    'invenio-db>=1.0.0b1',
-    'invenio-oauth2server>=1.0.0a9',
-    'invenio-rest>=1.0.0a9',
+    'invenio-accounts>=1.0.0b1',
+    'invenio-db>=1.0.0b3,<1.1.0',
+    'invenio-userprofiles>=1.0.0a8',
+    'invenio-rest>=1.0.0a10',
+    'invenio-access>=1.0.0a11',
+    'invenio-oauth2server>=1.0.0a12'
 ]
 
 packages = find_packages()
