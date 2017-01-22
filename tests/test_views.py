@@ -510,35 +510,35 @@ def test_assign_role(app, users, create_roles, roles_data,
     headers = [('Content-Type', 'application/json'),
                ('Accept', 'application/json')]
 
-    def put_test(user):
+    with app.app_context():
+        user = users['admin']
+
+        accounts_rest_permission_factory['allowed_users']['assign_role'][
+            user.id] = [
+            (User.query.get(users['user1'].id).roles[0].id, users['user2'].id)]
+
+        accounts_rest_permission_factory['allowed_users'][
+            'read_user_roles_list'][user.id] = [user.id]
+
         with app.test_client() as client:
             access_token = user.allowed_token if user else None
+
+            added_role_id = User.query.get(users['user1'].id).roles[0].id
 
             res = client.put(
                 url_for(
                     'invenio_accounts_rest.assign_role',
                     user_id=users['user2'].id,
-                    role_id=User.query.get(users['user1'].id).roles[0].id,
+                    role_id=added_role_id,
                     access_token=access_token,
                 ),
                 headers=headers
             )
             assert res.status_code == 200
 
-            user_roles = User.query.get(users['user2'].id).roles
-            assert User.query.get(users['user1'].id).roles[0] in user_roles
-
     with app.app_context():
-        allowed_user = users['admin']
-
-        accounts_rest_permission_factory['allowed_users']['assign_role'][
-            allowed_user.id] = [
-            (User.query.get(users['user1'].id).roles[0].id, users['user2'].id)]
-
-        accounts_rest_permission_factory['allowed_users'][
-            'read_user_roles_list'][allowed_user.id] = [allowed_user.id]
-
-        put_test(allowed_user)
+        user_roles = User.query.get(users['user2'].id).roles
+        assert added_role_id in [role.id for role in user_roles]
 
 
 def test_assign_role_permissions(app, users, create_roles, roles_data,
@@ -593,34 +593,32 @@ def test_unassign_role(app, users, create_roles, roles_data,
     headers = [('Content-Type', 'application/json'),
                ('Accept', 'application/json')]
 
-    def delete_test(user):
+    with app.app_context():
+        user = users['admin']
+
+        accounts_rest_permission_factory['allowed_users']['unassign_role'][
+            user.id] = [
+            (User.query.get(users['user1'].id).roles[0].id, users['user1'].id)]
+
         with app.test_client() as client:
             access_token = user.allowed_token if user else None
 
-            deleted_role = User.query.get(users['user1'].id).roles[0]
+            deleted_role_id = User.query.get(users['user1'].id).roles[0].id
 
             res = client.delete(
                 url_for(
                     'invenio_accounts_rest.unassign_role',
                     user_id=users['user1'].id,
-                    role_id=deleted_role.id,
+                    role_id=deleted_role_id,
                     access_token=access_token,
                 ),
                 headers=headers
             )
             assert res.status_code == 204
 
-            user_roles = User.query.get(users['user1'].id).roles
-            assert deleted_role not in user_roles
-
     with app.app_context():
-        allowed_user = users['admin']
-
-        accounts_rest_permission_factory['allowed_users']['unassign_role'][
-            allowed_user.id] = [
-            (User.query.get(users['user1'].id).roles[0].id, users['user1'].id)]
-
-        delete_test(allowed_user)
+        user_roles = User.query.get(users['user1'].id).roles
+        assert deleted_role_id not in [role.id for role in user_roles]
 
 
 def test_unassign_role_permissions(app, users, create_roles, roles_data,

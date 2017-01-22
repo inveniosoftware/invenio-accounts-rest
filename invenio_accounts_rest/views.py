@@ -366,6 +366,7 @@ class AssignRoleResource(ContentNegotiatedMethodView):
     def put(self, user, role):
         """Assign role to an user."""
         _datastore.add_role_to_user(user, role)
+        _datastore.commit()
         return self.make_response(200)
 
 
@@ -390,6 +391,7 @@ class UnassignRoleResource(ContentNegotiatedMethodView):
     def delete(self, user, role):
         """Remove role from a user."""
         _datastore.remove_role_from_user(user, role)
+        _datastore.commit()
         return self.make_response(204)
 
 
