@@ -71,12 +71,11 @@ def verify_list_permission(permission_factory):
     """
     # Note, cannot be done in one line due overloading of boolean
     # operations permission object.
-    with current_app.app_context():
-        if not permission_factory().can():
-            from flask_login import current_user
-            if not current_user.is_authenticated:
-                abort(401)
-            abort(403)
+    if not permission_factory().can():
+        from flask_login import current_user
+        if not current_user.is_authenticated:
+            abort(401)
+        abort(403)
 
 
 def need_list_permission(factory_name):
@@ -195,12 +194,11 @@ def verify_role_permission(permission_factory, role):
     """
     # Note, cannot be done in one line due overloading of boolean
     # operations permission object.
-    with current_app.app_context():
-        if not permission_factory(role=role).can():
-            from flask_login import current_user
-            if not current_user.is_authenticated:
-                abort(401)
-            abort(403)
+    if not permission_factory(role=role).can():
+        from flask_login import current_user
+        if not current_user.is_authenticated:
+            abort(401)
+        abort(403)
 
 
 def need_role_permission(factory_name):
@@ -317,12 +315,11 @@ def verify_reassign_role_permission(permission_factory, role, user):
     """
     # Note, cannot be done in one line due overloading of boolean
     # operations permission object.
-    with current_app.app_context():
-        if not permission_factory((role, user)).can():
-            from flask_login import current_user
-            if not current_user.is_authenticated:
-                abort(401)
-            abort(403)
+    if not permission_factory(role=role, user=user).can():
+        from flask_login import current_user
+        if not current_user.is_authenticated:
+            abort(401)
+        abort(403)
 
 
 def need_reassign_role_permission(factory_name):
@@ -407,12 +404,11 @@ def verify_user_permission(permission_factory, user):
     """
     # Note, cannot be done in one line due overloading of boolean
     # operations permission object.
-    with current_app.app_context():
-        if not permission_factory(user=user).can():
-            from flask_login import current_user
-            if not current_user.is_authenticated:
-                abort(401)
-            abort(403)
+    if not permission_factory(user=user).can():
+        from flask_login import current_user
+        if not current_user.is_authenticated:
+            abort(401)
+        abort(403)
 
 
 def need_user_permission(factory_name):

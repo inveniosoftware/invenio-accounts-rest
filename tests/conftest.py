@@ -101,9 +101,8 @@ def accounts_rest_permission_factory():
                     (role.id, user.id) in allowed_users[action][
                         current_user.id])
 
-        return lambda role_user: type('permission_factory', (), {
-            'can': lambda self: rr_permission_factory(role_user[0],
-                                                      role_user[1])
+        return lambda role, user: type('permission_factory', (), {
+            'can': lambda self: rr_permission_factory(role, user)
         })()
 
     def user_permission_factory_sub(action):
