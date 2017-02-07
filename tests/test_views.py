@@ -689,6 +689,10 @@ def test_update_role(app, users, create_roles, roles_data,
                     'op': 'replace',
                     'path': '/name',
                     'value': 'new_name'
+                }, {
+                    'op': 'replace',
+                    'path': '/description',
+                    'value': 'new_desc'
                 }]),
                 headers=headers
             )
@@ -703,7 +707,7 @@ def test_update_role(app, users, create_roles, roles_data,
                         _external=True
                     )
                 },
-                'description': r1.description,
+                'description': 'new_desc',
                 'name': 'new_name',
                 'id': r1.id
             }

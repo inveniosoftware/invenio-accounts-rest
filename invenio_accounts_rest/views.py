@@ -257,7 +257,10 @@ class RoleResource(ContentNegotiatedMethodView):
     def patch(self, role):
         """Update a role with a json-patch."""
         data = request.get_json(force=True)
-        data = apply_patch({'name': role.name}, data, True)
+        data = apply_patch({
+            'name': role.name,
+            'description': role.description,
+        }, data, True)
         with db.session.begin_nested():
             for key, value in data.items():
                 setattr(role, key, value)
