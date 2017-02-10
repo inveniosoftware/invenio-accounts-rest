@@ -310,48 +310,57 @@ def test_read_role_permissions(app, users, create_roles, roles_data,
 def test_create_role(app, users, create_roles, roles_data,
                      accounts_rest_permission_factory):
     """Test creating a role."""
-    headers = [('Content-Type', 'application/json'),
-               ('Accept', 'application/json')]
+    counter = [0]
 
-    def post_test(user):
+    def post_test(user, expected_code, headers):
+        counter[0] += 1
         with app.test_client() as client:
             access_token = user.allowed_token if user else None
-
             res = client.post(
                 url_for(
                     'invenio_accounts_rest.list_roles',
                     access_token=access_token,
                 ),
-                data=json.dumps(
-                    {'name': 'role', 'description': 'desc'}
-                ),
+                data=json.dumps({
+                    'name': 'testrole{}'.format(counter[0]),
+                    'description': 'desc'
+                }),
                 headers=headers
             )
 
-            assert res.status_code == 201
-            response_data = json.loads(res.get_data(as_text=True))
+            assert res.status_code == expected_code
+            if expected_code == 201:
+                response_data = json.loads(res.get_data(as_text=True))
 
-            role_id = response_data['id']
-            assert response_data == {
-                'links': {
-                    'self': url_for(
-                        'invenio_accounts_rest.role',
-                        role_id=role_id,
-                        _external=True
-                    )
-                },
-                'description': 'desc',
-                'name': 'role',
-                'id': role_id
-            }
+                role_id = response_data['id']
+                assert response_data == {
+                    'links': {
+                        'self': url_for(
+                            'invenio_accounts_rest.role',
+                            role_id=role_id,
+                            _external=True
+                        )
+                    },
+                    'description': 'desc',
+                    'name': 'testrole{}'.format(counter[0]),
+                    'id': role_id
+                }
 
     with app.app_context():
         allowed_user = users['admin']
 
         accounts_rest_permission_factory['allowed_users'][
             'create_role'].append(allowed_user.id)
-
-        post_test(allowed_user)
+        # test with valid content type
+        post_test(allowed_user, 201, [
+            ('Content-Type', 'application/json'),
+            ('Accept', 'application/json')
+        ])
+        # test with unknown content type
+        post_test(allowed_user, 406, [
+            ('Content-Type', 'application/unknown'),
+            ('Accept', 'application/json')
+        ])
 
 
 def test_create_role_permissions(app, users, create_roles, roles_data,
@@ -607,7 +616,7 @@ def test_unassign_role(app, users, create_roles, roles_data,
 
             res = client.delete(
                 url_for(
-                    'invenio_accounts_rest.unassign_role',
+                    'invenio_accounts_rest.assign_role',
                     user_id=users['user1'].id,
                     role_id=deleted_role_id,
                     access_token=access_token,
@@ -642,7 +651,7 @@ def test_unassign_role_permissions(app, users, create_roles, roles_data,
 
             res = client.delete(
                 url_for(
-                    'invenio_accounts_rest.unassign_role',
+                    'invenio_accounts_rest.assign_role',
                     user_id=users['user1'].id,
                     role_id=User.query.get(users['user1'].id).roles[0].id,
                     access_token=access_token,
@@ -667,11 +676,31 @@ def test_unassign_role_permissions(app, users, create_roles, roles_data,
         delete_test(other_user, 403)
 
 
+@pytest.mark.parametrize("headers,patch", [
+    (
+        [('Content-Type', 'application/json-patch+json'),
+         ('Accept', 'application/json')],
+        [{
+            'op': 'replace',
+            'path': '/name',
+            'value': 'new_name'
+        }, {
+            'op': 'replace',
+            'path': '/description',
+            'value': 'new_desc'
+        }]
+    ), (
+        [('Content-Type', 'application/json'),
+         ('Accept', 'application/json')],
+        {
+            'name': 'new_name',
+            'description': 'new_desc'
+        }
+    )
+])
 def test_update_role(app, users, create_roles, roles_data,
-                     accounts_rest_permission_factory):
+                     accounts_rest_permission_factory, headers, patch):
     """Test updating a role."""
-    headers = [('Content-Type', 'application/json'),
-               ('Accept', 'application/json-patch+json')]
 
     def patch_test(user):
         with app.test_client() as client:
@@ -685,15 +714,7 @@ def test_update_role(app, users, create_roles, roles_data,
                     role_id=r1.id,
                     access_token=access_token,
                 ),
-                data=json.dumps([{
-                    'op': 'replace',
-                    'path': '/name',
-                    'value': 'new_name'
-                }, {
-                    'op': 'replace',
-                    'path': '/description',
-                    'value': 'new_desc'
-                }]),
+                data=json.dumps(patch),
                 headers=headers
             )
 
@@ -731,8 +752,8 @@ def test_update_role_permissions(app, users, create_roles, roles_data,
     Allowed user and admin can update a role.
     Authenticated users cannot update roles.
     """
-    headers = [('Content-Type', 'application/json'),
-               ('Accept', 'application/json-patch+json')]
+    headers = [('Content-Type', 'application/json-patch+json'),
+               ('Accept', 'application/json')]
 
     def patch_test(user, expected_code):
         with app.app_context():

@@ -44,15 +44,35 @@ _fields_with_profile = _fields_without_profile.union(set([
 ]))
 
 
-def default_json_loader_without_profile(**kwargs):
-    """Default data loader when Invenio Userprofiles is not installed."""
-    data = request.get_json(force=True)
-    for key in data:
-        if key not in _fields_without_profile:
-            raise RESTValidationError(errors=[
-                FieldError(key, 'Unknown field {}'.format(key))
-            ])
-    return data
+_role_fields = set(['name', 'description'])
+
+
+def _default_json_loader(allowed_fields):
+    """Factory of JSON loaders which accept only a limited set of fields.
+
+    :param allowed_fields: list of accepted fields.
+
+    :returns: a JSON loader function.
+    """
+    def json_loader(**kwargs):
+        """Default data loader when Invenio Userprofiles is not installed."""
+        data = request.get_json(force=True)
+        for key in data:
+            if key not in allowed_fields:
+                raise RESTValidationError(errors=[
+                    FieldError(key, 'Unknown field {}'.format(key))
+                ])
+        return data
+    return json_loader
+
+
+default_role_json_loader = _default_json_loader(_role_fields)
+"""Default role JSON loader."""
+
+
+default_account_json_loader_without_profile = \
+    _default_json_loader(_fields_without_profile)
+"""Default account data loader when Invenio Userprofiles is not installed."""
 
 
 def _fix_profile(data):
@@ -67,33 +87,65 @@ def _fix_profile(data):
     return data
 
 
-def default_json_loader_with_profile(**kwargs):
+_default_account_json_loader_with_profile = \
+    _default_json_loader(_fields_with_profile)
+
+
+def default_account_json_loader_with_profile(**kwargs):
     """Default data loader when Invenio Userprofiles is installed."""
-    data = request.get_json(force=True)
-    for key in data:
-        if key not in _fields_with_profile:
-            raise RESTValidationError(errors=[
-                FieldError(key, 'Unknown field {}'.format(key))
-            ])
-
+    data = _default_account_json_loader_with_profile(**kwargs)
     _fix_profile(data)
-
     return data
 
 
-def _json_patch_loader_factory(fields, **kwargs):
+def default_role_json_patch_loader(role=None):
+    """Create JSON PATCH data loaders for role modifications.
+
+    :param role: the modified role.
+    :returns: a JSON corresponding to the patched role.
+    """
+    data = request.get_json(force=True)
+    if data is None:
+        abort(400)
+    modified_fields = {
+        cmd['path'][1:] for cmd in data
+        if 'path' in cmd and 'op' in cmd and cmd['op'] != 'test'
+    }
+    errors = [
+        FieldError(field, 'Unknown or immutable field {}.'.format(field))
+        for field in modified_fields.difference(_role_fields)
+    ]
+    if len(errors) > 0:
+        raise RESTValidationError(errors=errors)
+
+    original = {
+        'name': role.name, 'description': role.description
+    }
+    try:
+        patched = apply_patch(original, data)
+    except (JsonPatchException, JsonPointerException):
+        raise PatchJSONFailureRESTError()
+    return patched
+
+
+def account_json_patch_loader_factory(fields, **kwargs):
     """Create JSON PATCH data loaders for user properties modifications."""
     def json_patch_loader(user=None):
+        """JSON patch loader.
+
+        :param user: the modified account.
+        :returns: a JSON corresponding to the patched account.
+        """
         data = request.get_json(force=True)
         if data is None:
             abort(400)
         modified_fields = {
-            cmd['path'] for cmd in data
+            cmd['path'][1:] for cmd in data
             if 'path' in cmd and 'op' in cmd and cmd['op'] != 'test'
         }
         errors = [
-            FieldError(field, 'Unknown field {}.'.format(field))
-            for field in _fields_with_profile.intersection(modified_fields)
+            FieldError(field, 'Unknown or immutable field {}.'.format(field))
+            for field in modified_fields.difference(fields)
         ]
         if len(errors) > 0:
             raise RESTValidationError(errors=errors)
@@ -120,13 +172,11 @@ def _json_patch_loader_factory(fields, **kwargs):
     return json_patch_loader
 
 
-default_json_patch_loader_with_profile = _json_patch_loader_factory(
-    _fields_with_profile
-)
+default_account_json_patch_loader_with_profile = \
+    account_json_patch_loader_factory(_fields_with_profile)
 """JSON PATCH data loader for modifiying user properties including profiles."""
 
 
-default_json_patch_loader_without_profile = _json_patch_loader_factory(
-    _fields_without_profile
-)
+default_account_json_patch_loader_without_profile = \
+    account_json_patch_loader_factory(_fields_without_profile)
 """JSON PATCH data loader for modifiying user properties without profiles."""

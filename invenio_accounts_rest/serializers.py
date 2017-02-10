@@ -24,7 +24,7 @@
 
 """Invenio accounts REST module's serializers."""
 
-from flask import jsonify, url_for
+from flask import Response, jsonify, url_for
 
 
 def role_to_dict(role):
@@ -98,17 +98,15 @@ def roles_list_serializer(roles, code=200, headers=None, links=None,
     return response
 
 
-def status_code_serializer(code, headers=None):
-    """Serialize a status code to json response.
+def status_code_serializer(code=200, headers=None):
+    """Create a response without any content.
 
     :param code: http response code.
     :param headers: additional http response headers.
     :return: response from api.
     :rtype: Response
     """
-    response = jsonify({
-        'code': code,
-    })
+    response = Response()
     response.status_code = code
     if headers is not None:
         response.headers.extend(headers)

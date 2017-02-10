@@ -41,16 +41,24 @@ from sqlalchemy import String, cast, func, orm
 from werkzeug.local import LocalProxy
 
 from invenio_accounts_rest.errors import MaxResultWindowRESTError
-from invenio_accounts_rest.loaders import default_json_loader_with_profile, \
-    default_json_loader_without_profile, \
-    default_json_patch_loader_with_profile, \
-    default_json_patch_loader_without_profile
 from invenio_accounts_rest.proxies import current_accounts_rest
 from invenio_accounts_rest.serializers import role_serializer, \
     roles_list_serializer, status_code_serializer, user_serializer, \
     user_with_profile_serializer, users_list_serializer, \
     users_with_profile_list_serializer
+
 from .errors import MissingOldPasswordError
+
+# FIXME: remove the "isort:skip" once isort stops moving comments on multilines
+# and "nopep8" can be used instead.
+from invenio_accounts_rest.loaders import (  # isort:skip
+    default_account_json_loader_with_profile,
+    default_account_json_loader_without_profile,
+    default_account_json_patch_loader_with_profile,
+    default_account_json_patch_loader_without_profile,
+    default_role_json_loader, default_role_json_patch_loader
+)
+
 
 blueprint = Blueprint(
     'invenio_accounts_rest',
@@ -120,18 +128,38 @@ class RolesListResource(ContentNegotiatedMethodView):
 
     def __init__(self, max_result_window=None, **kwargs):
         """Constructor."""
-        super(RolesListResource, self).__init__(
-            method_serializers={
-                'POST': {
-                    'application/json': role_serializer,
-                },
-                'GET': {
-                    'application/json': roles_list_serializer,
+        self.loaders = kwargs.get(
+            'loaders',
+            current_app.config.get(
+                'ACCOUNTS_REST_ROLES_LIST_LOADERS', {
+                    'POST': {
+                        'application/json': default_role_json_loader,
+                    }
                 }
-            },
-            default_media_type='application/json',
-            **kwargs
+            )
         )
+        kwargs.setdefault(
+            'method_serializers',
+            current_app.config.get(
+                'ACCOUNTS_REST_ROLES_LIST_SERIALIZERS', {
+                    'POST': {
+                        'application/json': role_serializer,
+                    },
+                    'GET': {
+                        'application/json': roles_list_serializer,
+                    }
+                })
+        )
+        kwargs.setdefault(
+            'default_method_media_type',
+            current_app.config.get(
+                'ACCOUNTS_REST_ROLES_LIST_DEFAULT_MEDIA_TYPE', {
+                    'POST': 'application/json',
+                    'GET': 'application/json',
+                }
+            )
+        )
+        super(RolesListResource, self).__init__(**kwargs)
         self.max_result_window = max_result_window or 10000
 
     @need_list_permission('read_roles_list_permission_factory')
@@ -166,7 +194,12 @@ class RolesListResource(ContentNegotiatedMethodView):
     @need_list_permission('create_role_permission_factory')
     def post(self):
         """Create a new role."""
-        posted_role = _datastore.create_role(**request.get_json())
+        content_type = request.headers.get('Content-Type')
+        loader = self.loaders['POST'].get(content_type)
+        if loader is None:
+            abort(406)
+        data = loader()
+        posted_role = _datastore.create_role(**data)
         db.session.commit()
         return self.make_response(posted_role, 201)
 
@@ -227,24 +260,45 @@ class RoleResource(ContentNegotiatedMethodView):
 
     def __init__(self, **kwargs):
         """Constructor."""
-        super(RoleResource, self).__init__(
-            method_serializers={
-                'GET': {
-                    'application/json': role_serializer,
-                },
-                'DELETE': {
-                    'application/json': role_serializer,
-                },
-                'PATCH': {
-                    'application/json-patch+json': role_serializer,
+        self.loaders = kwargs.get(
+            'loaders',
+            current_app.config.get(
+                'ACCOUNTS_REST_ROLE_LOADERS', {
+                    'PATCH': {
+                        'application/json-patch+json':
+                        default_role_json_patch_loader,
+                        'application/json': default_role_json_loader,
+                    }
                 }
-            },
-            serializers={
-                'application/json': role_serializer
-            },
-            default_media_type='application/json',
-            **kwargs
+            )
         )
+
+        kwargs.setdefault(
+            'method_serializers',
+            current_app.config.get(
+                'ACCOUNTS_REST_ROLE_SERIALIZERS', {
+                    'GET': {
+                        'application/json': role_serializer,
+                    },
+                    'DELETE': {
+                        '*/*': status_code_serializer,
+                    },
+                    'PATCH': {
+                        'application/json': role_serializer,
+                    }
+                })
+        )
+        kwargs.setdefault(
+            'default_method_media_type',
+            current_app.config.get(
+                'ACCOUNTS_REST_ROLE_DEFAULT_MEDIA_TYPE', {
+                    'GET': 'application/json',
+                    'DELETE': '*/*',
+                    'PATCH': 'application/json',
+                }
+            )
+        )
+        super(RoleResource, self).__init__(**kwargs)
 
     @pass_role
     @need_role_permission('read_role_permission_factory')
@@ -256,11 +310,11 @@ class RoleResource(ContentNegotiatedMethodView):
     @need_role_permission('update_role_permission_factory')
     def patch(self, role):
         """Update a role with a json-patch."""
-        data = request.get_json(force=True)
-        data = apply_patch({
-            'name': role.name,
-            'description': role.description,
-        }, data, True)
+        content_type = request.headers.get('Content-Type')
+        loader = self.loaders['PATCH'].get(content_type)
+        if loader is None:
+            abort(406)
+        data = loader(role=role)
         with db.session.begin_nested():
             for key, value in data.items():
                 setattr(role, key, value)
@@ -276,7 +330,7 @@ class RoleResource(ContentNegotiatedMethodView):
         if Role.query.filter_by(id=role_to_delete_id).count():
             db.session.delete(role)
             db.session.commit()
-            return self.make_response(role, 204)
+            return self.make_response(code=204)
         else:
             raise ValueError("Cannot find role.")
 
@@ -346,19 +400,34 @@ def need_reassign_role_permission(factory_name):
 
 
 class AssignRoleResource(ContentNegotiatedMethodView):
-    """Assign role resource."""
+    """Role assignment resource."""
 
     view_name = 'assign_role'
 
     def __init__(self, **kwargs):
         """Constructor."""
-        super(AssignRoleResource, self).__init__(
-            serializers={
-                'application/json': status_code_serializer
-            },
-            default_media_type='application/json',
-            **kwargs
+        kwargs.setdefault(
+            'method_serializers',
+            current_app.config.get(
+                'ACCOUNTS_REST_ASSIGN_ROLES_SERIALIZERS', {
+                    'PUT': {
+                        'application/json': status_code_serializer,
+                    },
+                    'DELETE': {
+                        '*/*': status_code_serializer,
+                    },
+                })
         )
+        kwargs.setdefault(
+            'default_method_media_type',
+            current_app.config.get(
+                'ACCOUNTS_REST_ASSIGN_ROLES_DEFAULT_MEDIA_TYPE', {
+                    'PUT': 'application/json',
+                    'DELETE': '*/*',
+                },
+            )
+        )
+        super(AssignRoleResource, self).__init__(**kwargs)
 
     @pass_user(with_roles=True)
     @pass_role
@@ -367,23 +436,7 @@ class AssignRoleResource(ContentNegotiatedMethodView):
         """Assign role to an user."""
         _datastore.add_role_to_user(user, role)
         _datastore.commit()
-        return self.make_response(200)
-
-
-class UnassignRoleResource(ContentNegotiatedMethodView):
-    """Unassign role resource."""
-
-    view_name = 'unassign_role'
-
-    def __init__(self, **kwargs):
-        """Constructor."""
-        super(UnassignRoleResource, self).__init__(
-            serializers={
-                'application/json': status_code_serializer
-            },
-            default_media_type='application/json',
-            **kwargs
-        )
+        return self.make_response(code=200)
 
     @pass_user(with_roles=True)
     @pass_role
@@ -392,7 +445,7 @@ class UnassignRoleResource(ContentNegotiatedMethodView):
         """Remove role from a user."""
         _datastore.remove_role_from_user(user, role)
         _datastore.commit()
-        return self.make_response(204)
+        return self.make_response(code=204)
 
 
 def verify_user_permission(permission_factory, user):
@@ -493,33 +546,51 @@ class UserAccountResource(ContentNegotiatedMethodView):
 
     def __init__(self, **kwargs):
         """Constructor."""
+        default_json_loader = default_account_json_loader_without_profile \
+            if 'invenio-userprofiles' not in current_app.extensions else \
+            default_account_json_loader_with_profile
+        default_json_patch_loader = \
+            default_account_json_patch_loader_without_profile \
+            if 'invenio-userprofiles' not in current_app.extensions else \
+            default_account_json_patch_loader_with_profile
+
         self.loaders = kwargs.get(
             'loaders',
             current_app.config.get(
                 'ACCOUNTS_REST_ACCOUNT_LOADERS', {
-                    'application/json': default_json_loader_without_profile,
-                    'application/json-patch+json':
-                        default_json_patch_loader_without_profile,
-                }
-                if 'invenio-userprofiles' not in current_app.extensions else {
-                    'application/json': default_json_loader_with_profile,
-                    'application/json-patch+json':
-                    default_json_patch_loader_with_profile,
+                    'PATCH': {
+                        'application/json-patch+json':
+                        default_json_patch_loader,
+                        'application/json': default_json_loader,
+                    }
                 }
             )
         )
+
+        default_serializer = user_serializer \
+            if 'invenio-userprofiles' not in current_app.extensions else \
+            user_with_profile_serializer
         kwargs.setdefault(
-            'serializers',
+            'method_serializers',
             current_app.config.get(
                 'ACCOUNTS_REST_ACCOUNT_SERIALIZERS', {
-                    'application/json': user_serializer,
-                }
-                if 'invenio-userprofiles' not in current_app.extensions else {
-                    'application/json': user_with_profile_serializer,
-                }
+                    'GET': {
+                        'application/json': default_serializer,
+                    },
+                    'PATCH': {
+                        'application/json': default_serializer,
+                    },
+                })
+        )
+        kwargs.setdefault(
+            'default_method_media_type',
+            current_app.config.get(
+                'ACCOUNTS_REST_ACCOUNT_DEFAULT_MEDIA_TYPE', {
+                    'GET': 'application/json',
+                    'PATCH': 'application/json',
+                },
             )
         )
-        kwargs.setdefault('default_media_type', 'application/json')
         super(UserAccountResource, self).__init__(
             **kwargs
         )
@@ -535,7 +606,7 @@ class UserAccountResource(ContentNegotiatedMethodView):
     def patch(self, user):
         """Update a user's properties."""
         content_type = request.headers.get('Content-Type')
-        loader = self.loaders.get(content_type)
+        loader = self.loaders['PATCH'].get(content_type)
         if loader is None:
             abort(406)
         data = loader(user=user)
@@ -569,18 +640,26 @@ class UserListResource(ContentNegotiatedMethodView):
 
     def __init__(self, max_result_window=None, **kwargs):
         """Constructor."""
+        default_serializer = users_list_serializer \
+            if 'invenio-userprofiles' not in current_app.extensions else \
+            users_with_profile_list_serializer
         kwargs.setdefault(
-            'serializers',
+            'method_serializers',
             current_app.config.get(
-                'ACCOUNTS_REST_ACCOUNT_SERIALIZERS', {
-                    'application/json': users_list_serializer
-                }
-                if 'invenio-userprofiles' not in current_app.extensions else {
-                    'application/json': users_with_profile_list_serializer
-                }
+                'ACCOUNTS_REST_ACCOUNTS_LIST_SERIALIZERS', {
+                    'GET': {
+                        'application/json': default_serializer,
+                    },
+                })
+        )
+        kwargs.setdefault(
+            'default_method_media_type',
+            current_app.config.get(
+                'ACCOUNTS_REST_ACCOUNTS_LIST_DEFAULT_MEDIA_TYPE', {
+                    'GET': 'application/json',
+                },
             )
         )
-        kwargs.setdefault('default_media_type', 'application/json')
         super(UserListResource, self).__init__(
             **kwargs
         )
@@ -645,14 +724,6 @@ blueprint.add_url_rule(
     '/roles/<string:role_id>/users/<string:user_id>',
     view_func=AssignRoleResource.as_view(
         AssignRoleResource.view_name
-    )
-)
-
-
-blueprint.add_url_rule(
-    '/roles/<string:role_id>/users/<string:user_id>',
-    view_func=UnassignRoleResource.as_view(
-        UnassignRoleResource.view_name
     )
 )
 
