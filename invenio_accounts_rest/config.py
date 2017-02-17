@@ -48,8 +48,11 @@ ACCOUNTS_REST_ASSIGN_ROLE_PERMISSION_FACTORY = deny_all
 ACCOUNTS_REST_UNASSIGN_ROLE_PERMISSION_FACTORY = deny_all
 """Default unassign role from user permission factory: reject any request."""
 
+ACCOUNTS_REST_READ_ROLE_USERS_LIST_PERMISSION_FACTORY = deny_all
+"""Default list roles' users permission factory: reject any request."""
+
 ACCOUNTS_REST_READ_USER_ROLES_LIST_PERMISSION_FACTORY = deny_all
-"""Default list users roles permission factory: reject any request."""
+"""Default list users' roles permission factory: reject any request."""
 
 ACCOUNTS_REST_READ_USER_PROPERTIES_PERMISSION_FACTORY = deny_all
 """Default read user properties permission factory: reject any request."""

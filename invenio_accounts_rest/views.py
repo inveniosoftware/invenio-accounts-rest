@@ -359,6 +359,74 @@ def pass_user(with_roles=False):
     return pass_user_decorator
 
 
+class RoleUsersListResource(ContentNegotiatedMethodView):
+    """Resource listing users having a specific role assigned."""
+
+    view_name = 'role_users_list'
+
+    def __init__(self, max_result_window=None, **kwargs):
+        """Constructor."""
+        default_serializer = users_list_serializer \
+            if 'invenio-userprofiles' not in current_app.extensions else \
+            users_with_profile_list_serializer
+        kwargs.setdefault(
+            'method_serializers',
+            current_app.config.get(
+                'ACCOUNTS_REST_ACCOUNTS_LIST_SERIALIZERS', {
+                    'GET': {
+                        'application/json': default_serializer,
+                    },
+                })
+        )
+        kwargs.setdefault(
+            'default_method_media_type',
+            current_app.config.get(
+                'ACCOUNTS_REST_ACCOUNTS_LIST_DEFAULT_MEDIA_TYPE', {
+                    'GET': 'application/json',
+                },
+            )
+        )
+        super(RoleUsersListResource, self).__init__(**kwargs)
+        self.max_result_window = max_result_window or 10000
+
+    @pass_role
+    @need_role_permission('read_role_users_list_permission_factory')
+    def get(self, role):
+        """Get a list of the user's roles."""
+        page = request.values.get('page', 1, type=int)
+        size = request.values.get('size', 10, type=int)
+        if page * size >= self.max_result_window:
+            raise MaxResultWindowRESTError()
+
+        query_string = request.args.get('q')
+        users_query = db.session.query(User).join(userrole).filter_by(
+            role_id=role.id
+        ).order_by(User.email)
+        total_query = db.session.query(
+            func.count(User.id)).join(userrole).filter_by(
+                role_id=role.id
+            )
+        if query_string is not None:
+            query_filter = User.email.like('%{}%'.format(query_string))
+            users_query = users_query.filter(query_filter)
+            total_query = total_query.filter(query_filter)
+        role_users = users_query.slice((page - 1) * size, page * size).all()
+        total = total_query.scalar()
+
+        result = self.make_response(
+            users=role_users,
+            total=total,
+            links=paginated_query_links(
+                'invenio_accounts_rest.role_users_list',
+                total, page, size,
+                self.max_result_window,
+                role_id=role.id),
+            code=200,
+        )
+
+        return result
+
+
 def verify_reassign_role_permission(permission_factory, role, user):
     """Check that the current user has permissions on reassigning a role.
 
@@ -492,13 +560,24 @@ class UserRolesListResource(ContentNegotiatedMethodView):
 
     def __init__(self, max_result_window=None, **kwargs):
         """Constructor."""
-        super(UserRolesListResource, self).__init__(
-            serializers={
-                'application/json': roles_list_serializer
-            },
-            default_media_type='application/json',
-            **kwargs
+        kwargs.setdefault(
+            'method_serializers',
+            current_app.config.get(
+                'ACCOUNTS_REST_ROLES_LIST_SERIALIZERS', {
+                    'GET': {
+                        'application/json': roles_list_serializer,
+                    }
+                })
         )
+        kwargs.setdefault(
+            'default_method_media_type',
+            current_app.config.get(
+                'ACCOUNTS_REST_ROLES_LIST_DEFAULT_MEDIA_TYPE', {
+                    'GET': 'application/json',
+                }
+            )
+        )
+        super(UserRolesListResource, self).__init__(**kwargs)
         self.max_result_window = max_result_window or 10000
 
     @pass_user()
@@ -716,6 +795,14 @@ blueprint.add_url_rule(
     '/roles/<string:role_id>',
     view_func=RoleResource.as_view(
         RoleResource.view_name
+    )
+)
+
+
+blueprint.add_url_rule(
+    '/roles/<string:role_id>/users',
+    view_func=RoleUsersListResource.as_view(
+        RoleUsersListResource.view_name
     )
 )
 

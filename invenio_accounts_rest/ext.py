@@ -83,6 +83,13 @@ class InvenioAccountsREST(object):
         return load_or_import_from_config(
             'ACCOUNTS_REST_UNASSIGN_ROLE_PERMISSION_FACTORY', app=self.app)
 
+    def read_role_users_list_permission_factory(self, **kwargs):
+        """Permission factory for reading a role's list of users."""
+        return load_or_import_from_config(
+            'ACCOUNTS_REST_READ_ROLE_USERS_LIST_PERMISSION_FACTORY',
+            app=self.app
+        )
+
     def read_user_roles_list_permission_factory(self, **kwargs):
         """Permission factory for reading the list of roles."""
         return load_or_import_from_config(

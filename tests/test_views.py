@@ -53,6 +53,7 @@ def normalize_links(links):
         """Parse a link in order to make the query string deterministic."""
         parsed_link = urlparse(link)._asdict()
         parsed_link['query'] = parse_qs(parsed_link['query'])
+        return parsed_link
     return {
         name: normalize(link) for name, link in iteritems(links)
     }
@@ -1392,26 +1393,6 @@ def test_user_search(app, with_profiles, users, create_roles, roles_data,
             response_data = json.loads(res.get_data(as_text=True))
             response_data['links'] = normalize_links(response_data['links'])
 
-            def expected_user(user):
-                expected_user = {
-                    'id': user.id,
-                    'email': user.data['email'],
-                    'active': True,
-                    'links': {
-                        'self': url_for(
-                            'invenio_accounts_rest.user',
-                            user_id=user.id,
-                            _external=True
-                        )
-                    }
-                }
-                if with_profiles:
-                    expected_user.update({
-                        'full_name': user.data['profile']['full_name'],
-                        'username': user.data['profile']['username'],
-                    })
-                return expected_user
-
             assert response_data == {
                 'links': normalize_links({
                     'prev': url_for(
@@ -1424,9 +1405,133 @@ def test_user_search(app, with_profiles, users, create_roles, roles_data,
                     ),
                 }),
                 'hits': {
-                    'hits': [expected_user(user) for user in
+                    'hits': [expected_user(user, with_profiles) for user in
                              sorted(users.values(),
                                     key=lambda user: user.data['email'])[2:4]],
-                    'total': 6
+                    'total': 9
                 }
             }
+
+
+@pytest.mark.parametrize('app', [
+    {'with_profiles': True}, {'with_profiles': False}
+], indirect=['app'])
+def test_role_users_search(app, with_profiles, users, create_roles, roles_data,
+                           accounts_rest_permission_factory):
+    """Test searching users having a specific role assigned."""
+    headers = [('Content-Type', 'application/json'),
+               ('Accept', 'application/json')]
+
+    # assign the role to 'user1, user2 and user3'
+    with app.app_context():
+        role = Role.query.filter(Role.id == create_roles[0]['id']).one()
+        assigned_users = [users[username] for username in
+                          ['user{}'.format(idx) for idx in range(1, 6)]]
+        user_models = User.query.filter(
+            User.id.in_(user.id for user in assigned_users)
+        ).all()
+        for model in user_models:
+            if role not in model.roles:
+                model.roles.append(role)
+        db.session.commit()
+
+        url = url_for(
+            'invenio_accounts_rest.role_users_list',
+            role_id=role.id,
+            access_token=users['user1'].allowed_token, page=2, size=2
+        )
+        accounts_rest_permission_factory['allowed_users'][
+            'read_role_users_list'][users['user1'].id] = [role.id]
+
+    with app.test_client() as client:
+        res = client.get(url, headers=headers)
+        assert res.status_code == 200
+        response_data = json.loads(res.get_data(as_text=True))
+
+        response_data['links'] = normalize_links(response_data['links'])
+
+    with app.app_context():
+        assert response_data == {
+            'links': normalize_links({
+                'prev': url_for(
+                    'invenio_accounts_rest.role_users_list',
+                    role_id=role.id,
+                    page=1, size=2, _external=True
+                ),
+                'next': url_for(
+                    'invenio_accounts_rest.role_users_list',
+                    role_id=role.id,
+                    page=3, size=2, _external=True
+                ),
+            }),
+            'hits': {
+                'hits': [expected_user(user, with_profiles) for user in
+                         sorted(assigned_users,
+                                key=lambda user: user.data['email'])[2:4]],
+                'total': 5
+            }
+        }
+
+    with app.app_context():
+        url = url_for(
+            'invenio_accounts_rest.role_users_list',
+            role_id=role.id, q='user1',
+            access_token=users['user1'].allowed_token
+        )
+    # test filtering by name
+    with app.test_client() as client:
+        res = client.get(url, headers=headers)
+        assert res.status_code == 200
+        response_data = json.loads(res.get_data(as_text=True))
+        assert response_data['hits']['total'] == 1
+        assert response_data['hits']['hits'][0]['id'] == users['user1'].id
+
+
+def test_role_users_search_permissions(app, users, create_roles, roles_data,
+                                       accounts_rest_permission_factory):
+    """Test permissions of searching users having a specific role assigned."""
+    headers = [('Content-Type', 'application/json'),
+               ('Accept', 'application/json')]
+    with app.app_context():
+        role = Role.query.filter(Role.id == create_roles[0]['id']).one()
+
+    def test_role_user_search(user, expected_code):
+        url = url_for(
+            'invenio_accounts_rest.role_users_list',
+            role_id=role.id,
+            access_token=user.allowed_token if user is not None else None
+        )
+
+        with app.test_client() as client:
+            res = client.get(url, headers=headers)
+            assert res.status_code == expected_code
+
+    with app.app_context():
+        accounts_rest_permission_factory['allowed_users'][
+            'read_role_users_list'][users['user1'].id] = [role.id]
+
+        test_role_user_search(None, 401)
+        test_role_user_search(users['user2'], 403)
+        test_role_user_search(users['user1'], 200)
+
+
+def expected_user(user, with_profiles):
+    """Serialize user as expected."""
+    expected_user = {
+        'id': user.id,
+        'email': user.data['email'],
+        'active': True,
+        'links': {
+            'self': url_for(
+                'invenio_accounts_rest.user',
+                user_id=user.id,
+                _external=True
+            )
+        }
+    }
+    if with_profiles:
+        expected_user.update({
+            'full_name': user.data['profile']['full_name'],
+            'username': user.data['profile']['username'],
+        })
+    return expected_user

@@ -67,6 +67,7 @@ def accounts_rest_permission_factory():
         'create_role': [],
         'assign_role': {},
         'unassign_role': {},
+        'read_role_users_list': {},
         'read_user_roles_list': {},
         'read_user_properties': {},
         'update_user_properties': {},
@@ -123,6 +124,8 @@ def accounts_rest_permission_factory():
         'create_role': list_permission_factory_sub('create_role'),
         'assign_role': reassign_role_permission_factory_sub('assign_role'),
         'unassign_role': reassign_role_permission_factory_sub('unassign_role'),
+        'read_role_users_list': role_permission_factory_sub(
+            'read_role_users_list'),
         'read_user_roles_list': user_permission_factory_sub(
             'read_user_roles_list'),
         'read_user_properties': user_permission_factory_sub(
@@ -175,6 +178,7 @@ def app(request, accounts_rest_permission_factory):
     create_role = accounts_rest_permission_factory['create_role']
     assign_role = accounts_rest_permission_factory['assign_role']
     unassign_role = accounts_rest_permission_factory['unassign_role']
+    role_users = accounts_rest_permission_factory['read_role_users_list']
     user_roles = accounts_rest_permission_factory['read_user_roles_list']
     read_user_prop = accounts_rest_permission_factory['read_user_properties']
     mod_user_prop = accounts_rest_permission_factory['update_user_properties']
@@ -188,6 +192,7 @@ def app(request, accounts_rest_permission_factory):
         ACCOUNTS_REST_CREATE_ROLE_PERMISSION_FACTORY=create_role,
         ACCOUNTS_REST_ASSIGN_ROLE_PERMISSION_FACTORY=assign_role,
         ACCOUNTS_REST_UNASSIGN_ROLE_PERMISSION_FACTORY=unassign_role,
+        ACCOUNTS_REST_READ_ROLE_USERS_LIST_PERMISSION_FACTORY=role_users,
         ACCOUNTS_REST_READ_USER_ROLES_LIST_PERMISSION_FACTORY=user_roles,
         ACCOUNTS_REST_READ_USER_PROPERTIES_PERMISSION_FACTORY=read_user_prop,
         ACCOUNTS_REST_UPDATE_USER_PROPERTIES_PERMISSION_FACTORY=mod_user_prop,
@@ -247,7 +252,7 @@ def users_data(with_profiles):
         return data
 
     users = {
-        'user{}'.format(idx): user_data(idx) for idx in range(1, 5)
+        'user{}'.format(idx): user_data(idx) for idx in range(1, 8)
     }
     users.update({
         'inactive': dict(
