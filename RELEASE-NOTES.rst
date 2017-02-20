@@ -1,8 +1,8 @@
 ===============================
- Invenio-Accounts-REST v1.0.0a2
+ Invenio-Accounts-REST v1.0.0a3
 ===============================
 
-Invenio-Accounts-REST v1.0.0a2 was released on February 15, 2017.
+Invenio-Accounts-REST v1.0.0a3 was released on February 20, 2017.
 
 About
 -----
@@ -19,7 +19,7 @@ What's new
 Installation
 ------------
 
-   $ pip install invenio-accounts-rest==1.0.0a2
+   $ pip install invenio-accounts-rest==1.0.0a3
 
 Documentation
 -------------
