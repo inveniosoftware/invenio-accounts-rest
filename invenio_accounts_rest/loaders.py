@@ -27,8 +27,8 @@
 from flask import request
 from invenio_rest.errors import FieldError, RESTValidationError
 from jsonpatch import JsonPatchException, JsonPointerException, apply_patch
-from .errors import PatchJSONFailureRESTError
 
+from .errors import PatchJSONFailureRESTError
 
 _fields_without_profile = set([
     'email',

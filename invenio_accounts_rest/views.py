@@ -29,9 +29,8 @@ from __future__ import absolute_import, print_function
 from functools import wraps
 
 from flask import Blueprint, abort, current_app, request, url_for
-from flask_security.changeable import encrypt_password
 from flask_security.signals import password_changed
-from flask_security.utils import verify_password
+from flask_security.utils import hash_password, verify_password
 from invenio_accounts.models import Role, User, userrole
 from invenio_db import db
 from invenio_oauth2server import require_api_auth
@@ -405,7 +404,7 @@ class RoleUsersListResource(ContentNegotiatedMethodView):
         total_query = db.session.query(
             func.count(User.id)).join(userrole).filter_by(
                 role_id=role.id
-            )
+        )
         if query_string is not None:
             query_filter = User.email.like('%{}%'.format(query_string))
             users_query = users_query.filter(query_filter)
@@ -596,7 +595,7 @@ class UserRolesListResource(ContentNegotiatedMethodView):
         total_query = db.session.query(
             func.count(Role.id)).join(userrole).filter_by(
                 user_id=user.id
-            )
+        )
         if query_string is not None:
             query_filter = Role.name.like('%{}%'.format(query_string))
             roles_query = roles_query.filter(query_filter)
@@ -697,7 +696,7 @@ class UserAccountResource(ContentNegotiatedMethodView):
                 raise MissingOldPasswordError()
             updated_password = data['password']
             if verify_password(data['old_password'], user.password):
-                user.password = encrypt_password(updated_password)
+                user.password = hash_password(updated_password)
                 db.session.commit()
                 _datastore.put(user)
                 password_changed.send(current_app._get_current_object(),
