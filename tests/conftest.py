@@ -38,7 +38,7 @@ from flask_babelex import Babel
 from flask_breadcrumbs import Breadcrumbs
 from flask_mail import Mail
 from flask_menu import Menu
-from flask_security.utils import encrypt_password
+from flask_security.utils import hash_password
 from invenio_access import InvenioAccess
 from invenio_access.models import ActionUsers
 from invenio_access.permissions import superuser_access
@@ -291,7 +291,7 @@ def users(app, db, roles_data, users_data, create_roles):
         with db.session.begin_nested():
 
             for user_key, user_data in iteritems(users_data):
-                user_data['password'] = encrypt_password(user_data['password'])
+                user_data['password'] = hash_password(user_data['password'])
                 user = ds.create_user(**user_data)
                 result[user_key] = user
 

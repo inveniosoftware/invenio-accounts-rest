@@ -26,7 +26,6 @@
 
 from .utils import deny_all
 
-
 ACCOUNTS_REST_READ_ROLE_PERMISSION_FACTORY = deny_all
 """Default get role permission factory: reject any request."""
 
