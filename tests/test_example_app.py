@@ -26,18 +26,16 @@
 """Test example app."""
 
 import os
-import signal
-import subprocess
-import sys
-import time
+from os.path import abspath, dirname, join
 
 
 def setup_module(module):
     """Set up before all tests."""
-    # switch to examples/app.py
-    exampleappdir = os.path.join(os.path.split(sys.path[0])[0],
-                                 'examples')
-    os.chdir(exampleappdir)
+
+    # Go to example directory
+    project_dir = dirname(dirname(abspath(__file__)))
+    exampleapp_dir = join(project_dir, 'examples')
+    os.chdir(exampleapp_dir)
 
 
 def teardown_module(module):

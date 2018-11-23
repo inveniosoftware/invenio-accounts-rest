@@ -44,8 +44,8 @@ from invenio_access.models import ActionUsers
 from invenio_access.permissions import superuser_access
 from invenio_accounts import InvenioAccounts
 from invenio_accounts.models import Role, User
-from invenio_db import db as db_
 from invenio_db import InvenioDB
+from invenio_db import db as db_
 from invenio_oauth2server import InvenioOAuth2Server, \
     InvenioOAuth2ServerREST, current_oauth2server
 from invenio_oauth2server.models import Token
