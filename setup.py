@@ -66,10 +66,10 @@ setup_requires = [
 
 install_requires = [
     'invenio-accounts>=1.0.0b9',
-    'invenio-db>=1.0.0b3,<1.1.0',
+    'invenio-db>=1.0.0,<1.1.0',
     'invenio-rest>=1.0.0a10',
     'invenio-access>=1.0.0a11',
-    'invenio-oauth2server>=1.0.0a12'
+    'invenio-oauth2server>=1.0.0a12',
 ]
 
 packages = find_packages()
