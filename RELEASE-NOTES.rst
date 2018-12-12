@@ -19,7 +19,7 @@ What's new
 Installation
 ------------
 
-   $ pip install invenio-accounts-rest==1.0.0a4
+   $ pip install invenio-accounts-rest==1.0.0a5
 
 Documentation
 -------------
