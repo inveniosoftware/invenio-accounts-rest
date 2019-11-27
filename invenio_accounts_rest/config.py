@@ -26,6 +26,9 @@
 
 from .utils import deny_all
 
+ACCOUNTS_REST_AUTH_VIEWS = True
+"""Enable REST API authentication views."""
+
 ACCOUNTS_REST_READ_ROLE_PERMISSION_FACTORY = deny_all
 """Default get role permission factory: reject any request."""
 

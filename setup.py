@@ -100,8 +100,9 @@ setup(
             'invenio_accounts_rest = '
             'invenio_accounts_rest:InvenioAccountsREST',
         ],
-        'invenio_base.api_views': [
+        'invenio_base.api_blueprints': [
             'invenio_accounts_rest = invenio_accounts_rest.views:blueprint',
+            'invenio_accounts_rest_auth = invenio_accounts_rest.views_auth:create_blueprint',
         ],
         'invenio_i18n.translations': [
             'messages = invenio_accounts_rest',

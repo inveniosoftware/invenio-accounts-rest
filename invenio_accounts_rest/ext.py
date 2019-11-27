@@ -26,11 +26,10 @@
 
 from __future__ import absolute_import, print_function
 
-from flask import current_app
+from flask import current_app, Blueprint
 
 from . import config
 from .utils import load_or_import_from_config
-from .views import blueprint
 
 
 class InvenioAccountsREST(object):
@@ -44,8 +43,13 @@ class InvenioAccountsREST(object):
     def init_app(self, app):
         """Flask application initialization."""
         self.app = app
+
+        # Register for the security email templates
+        security_bp = Blueprint(
+            'security', 'flask_security.core', template_folder='templates')
+        app.register_blueprint(security_bp)
+
         self.init_config(app)
-        app.register_blueprint(blueprint)
         app.extensions['invenio-accounts-rest'] = self
 
     def read_role_permission_factory(self, **kwargs):

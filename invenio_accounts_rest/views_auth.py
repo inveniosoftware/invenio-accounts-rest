@@ -1,0 +1,477 @@
+# -*- coding: utf-8 -*-
+#
+# This file is part of Invenio.
+# Copyright (C) 2017-2019 CERN.
+#
+# Invenio is free software; you can redistribute it and/or modify it
+# under the terms of the MIT License; see LICENSE file for more details.
+
+"""REST API user management and authentication."""
+
+from __future__ import absolute_import, print_function
+
+from collections import defaultdict
+
+from flask import Blueprint, after_this_request, current_app, \
+    jsonify, redirect, url_for
+from flask.views import MethodView
+from flask_login import login_required
+from flask_security import current_user
+from flask_security.changeable import change_user_password
+from flask_security.confirmable import generate_confirmation_token, \
+    requires_confirmation, confirm_email_token_status, confirm_user
+from flask_security.decorators import anonymous_user_required
+from flask_security.recoverable import generate_reset_password_token, update_password
+from flask_security.registerable import register_user
+from flask_security.signals import user_registered
+from flask_security.utils import get_message, login_user, logout_user, \
+    verify_and_update_password, hash_password, config_value, send_mail
+from invenio_accounts.models import SessionActivity
+from invenio_accounts.sessions import delete_session
+from invenio_db import db
+from webargs import ValidationError, fields, validate
+from webargs.flaskparser import FlaskParser as FlaskParserBase
+from werkzeug.local import LocalProxy
+from invenio_rest.errors import RESTValidationError, FieldError
+from flask.helpers import get_root_path
+
+from .serializers import role_to_dict
+
+# TODO: Move to "invenio_accouts.proxies"?
+current_datastore = LocalProxy(lambda: current_app.extensions['security'].datastore)
+current_security = LocalProxy(lambda: current_app.extensions['security'])
+
+
+def create_blueprint(app):
+    """Conditionally creates the blueprint."""
+    blueprint = Blueprint('invenio_accounts_rest_auth', __name__)
+
+    security_state = app.extensions['security']
+
+    if app.config['ACCOUNTS_REST_AUTH_VIEWS']:
+
+        blueprint.add_url_rule(
+            '/login',
+            view_func=LoginView.as_view('login'))
+        blueprint.add_url_rule(
+            '/logout',
+            view_func=LogoutView.as_view('logout'))
+        blueprint.add_url_rule(
+            '/me',
+            view_func=UserInfoView.as_view('user_info'))
+
+        if security_state.registerable:
+            blueprint.add_url_rule(
+                '/register',
+                view_func=RegisterView.as_view('register'))
+
+        if security_state.changeable:
+            blueprint.add_url_rule(
+                '/change-password',
+                view_func=ChangePasswordView.as_view('change_password'))
+
+        if security_state.recoverable:
+            blueprint.add_url_rule(
+                '/forgot-password',
+                view_func=ForgotPasswordView.as_view('forgot_password'))
+            blueprint.add_url_rule(
+                '/reset-password',
+                view_func=ResetPasswordView.as_view('reset_password'))
+
+        if security_state.confirmable:
+            blueprint.add_url_rule(
+                '/send-confirmation-email',
+                view_func=SendConfirmationEmailView.as_view(
+                    'send_confirmation'))
+
+            blueprint.add_url_rule(
+                '/confirm-email',
+                view_func=ConfirmEmailView.as_view('confirm_email'))
+
+        # TODO: Check this
+        if app.config['ACCOUNTS_SESSION_ACTIVITY_ENABLED']:
+            blueprint.add_url_rule(
+                '/revoke-session',
+                view_func=RevokeSessionView.as_view('revoke_session'))
+    return blueprint
+
+
+
+class FlaskParser(FlaskParserBase):
+
+    # TODO: Add error codes to all messages (e.g. 'user-already-exists')
+    def handle_error(self, error, *args, **kwargs):
+        if isinstance(error, ValidationError):
+            _errors = []
+            for field, messages in error.messages.items():
+                _errors.extend([FieldError(field, msg) for msg in messages])
+            raise RESTValidationError(errors=_errors)
+        super(FlaskParser, self).handle_error(error, *args, **kwargs)
+
+
+webargs_parser = FlaskParser()
+use_args = webargs_parser.use_args
+use_kwargs = webargs_parser.use_kwargs
+
+
+#
+# Field validators
+#
+def user_exists(email):
+    """Validate that a user exists."""
+    if not current_datastore.get_user(email):
+        raise ValidationError(get_message('USER_DOES_NOT_EXIST')[0])
+
+
+def unique_user_email(email):
+    """Validate unique user email."""
+    if current_datastore.get_user(email) is not None:
+        raise ValidationError(
+            get_message('EMAIL_ALREADY_ASSOCIATED', email=email)[0])
+
+
+def default_user_payload(user):
+    return {
+        'id': user.id,
+        'email': user.email,
+        'confirmed_at': user.confirmed_at.isoformat() if user.confirmed_at else None,
+        'last_login_at': user.last_login_at.isoformat() if user.last_login_at else None,
+        # TODO: Check roles
+        'roles': [role_to_dict(role) for role in user.roles],
+    }
+
+
+def default_confirmation_link(user):
+    token = generate_confirmation_token(user)
+    # TODO: or hardcoded from config?
+    confirmation_link = url_for('.confirm_email', token=token, _external=True)
+    return confirmation_link, token
+
+
+def default_reset_password_link(user):
+    token = generate_reset_password_token(user)
+    # TODO: or hardcoded from config?
+    reset_link = url_for('.reset_password', token=token, _external=True)
+    return reset_link, token
+
+
+def _abort(message, field=None, status=None):
+    if field:
+        raise RESTValidationError(FieldError(field, message))
+    raise RESTValidationError(description=message)
+
+def _commit(response=None):
+    current_datastore.commit()
+    return response
+
+
+
+class LoginView(MethodView):
+    """View to login a user."""
+
+    decorators = [anonymous_user_required]
+
+    post_args = {
+        'email': fields.Email(required=True, validate=[user_exists]),
+        'password': fields.String(
+            required=True, validate=[validate.Length(min=6, max=128)])
+    }
+
+    def success_response(self, user):
+        """Return a successful login response."""
+        return jsonify(default_user_payload(user))
+
+    def verify_login(self, user, password=None, **kwargs):
+        """Verify the login via password."""
+        if not user.password:
+            _abort(get_message('PASSWORD_NOT_SET')[0], 'password')
+        if not verify_and_update_password(password, user):
+            _abort(get_message('INVALID_PASSWORD')[0], 'password')
+        if requires_confirmation(user):
+            _abort(get_message('CONFIRMATION_REQUIRED')[0])
+        if not user.is_active:
+            _abort(get_message('DISABLED_ACCOUNT')[0])
+
+    def get_user(self, email=None, **kwargs):
+        """Retrieve a user by the provided arguments."""
+        return current_datastore.get_user(email)
+
+    def login_user(self, user):
+        """Perform any login actions."""
+        return login_user(user)
+
+    @use_kwargs(post_args)
+    def post(self, **kwargs):
+        """Verify and login a user."""
+        user = self.get_user(**kwargs)
+        self.verify_login(user, **kwargs)
+        self.login_user(user)
+        return self.success_response(user)
+
+
+class UserInfoView(MethodView):
+
+    decorators = [login_required]
+
+    def response(self, user):
+        return jsonify(default_user_payload(user))
+
+    def get(self):
+        return self.response(current_user)
+
+
+class LogoutView(MethodView):
+
+    def logout_user(self):
+        if current_user.is_authenticated:
+            logout_user()
+
+    def sucess_respone(self):
+        return jsonify({'message': 'User logged out.'})
+
+    def post(self):
+        self.logout_user()
+        return self.sucess_respone()
+
+
+class RegisterView(MethodView):
+    """View to register a new user."""
+
+    decorators = [anonymous_user_required]
+
+    post_args = {
+        'email': fields.Email(required=True, validate=[unique_user_email]),
+        'password': fields.String(
+            required=True, validate=[validate.Length(min=6, max=128)])
+    }
+
+    def generate_confirmation_link(self, user):
+        return default_confirmation_link(user)
+
+    def send_confirmation_link(self, user):
+        if current_security.confirmable and config_value('SEND_REGISTER_EMAIL'):
+            confirmation_link, token = self.generate_confirmation_link(user)
+            send_mail(config_value('EMAIL_SUBJECT_REGISTER'), user.email,
+                    'welcome', user=user, confirmation_link=confirmation_link)
+            return token
+
+    def register_user(self, email=None, password=None, **kwargs):
+        password = hash_password(password)
+        user = current_datastore.create_user(email=email, password=password, **kwargs)
+        current_datastore.commit()
+        token = self.send_confirmation_link(user)
+        user_registered.send(
+            current_app._get_current_object(), user=user, confirm_token=token)
+        return user
+
+    def login_user(self, user):
+        if not current_security.confirmable or \
+                current_security.login_without_confirmation:
+            after_this_request(_commit)
+            login_user(user)
+
+    def sucess_response(self, user):
+        return jsonify(default_user_payload(user))
+
+    @use_kwargs(post_args)
+    def post(self, **kwargs):
+        import wdb; wdb.set_trace()
+        user = self.register_user(**kwargs)
+        self.login_user(user)
+        return self.sucess_response(user)
+
+
+class ForgotPasswordView(MethodView):
+
+    decorators = [anonymous_user_required]
+
+    post_args = {
+        'email': fields.Email(required=True, validate=[user_exists]),
+    }
+
+    def get_user(self, email=None, **kwargs):
+        """Retrieve a user by the provided arguments."""
+        return current_datastore.get_user(email)
+
+    def generate_reset_password_link(self, user):
+        return default_reset_password_link(user)
+
+    def send_reset_password_instructions(self, user):
+        reset_link, token = self.generate_reset_password_link(user)
+        if config_value('SEND_PASSWORD_RESET_EMAIL'):
+            send_mail(config_value('EMAIL_SUBJECT_PASSWORD_RESET'), user.email,
+                'reset_instructions', user=user, reset_link=reset_link)
+            reset_password_instructions_sent.send(
+                current_app._get_current_object(), user=user, token=token)
+
+    def success_response(self, user):
+        return jsonify({'message': get_message(
+            'PASSWORD_RESET_REQUEST', email=user.email)[0]})
+
+    @use_kwargs(post_args)
+    def post(self, **kwargs):
+        user = self.get_user(**kwargs)
+        self.send_reset_password_instructions(user)
+        return self.success_response(user)
+
+
+class ResetPasswordView(MethodView):
+
+    decorators = [anonymous_user_required]
+
+    post_args = {
+        'token': fields.String(required=True),
+        'password': fields.String(
+            required=True, validate=[validate.Length(min=6, max=128)]),
+    }
+
+    def get_user(self, token=None, **kwargs):
+        # verify the token
+        expired, invalid, user = reset_password_token_status(token)
+        if invalid:
+            _abort(get_message('INVALID_RESET_PASSWORD_TOKEN')[0])
+        if expired:
+            send_reset_password_instructions(user)
+            _abort(get_message('PASSWORD_RESET_EXPIRED',
+                email=user.email, within=_security.reset_password_within)[0])
+        return user
+
+    def success_response(self, user):
+        return jsonify({'message': get_message('PASSWORD_RESET')[0]})
+
+    @use_kwargs(post_args)
+    def post(self, **kwargs):
+        user = self.get_user(**kwargs)
+        after_this_request(_commit)
+        update_password(user, kwargs['password'])
+        login_user(user)
+        return self.success_response(user)
+
+
+class ChangePasswordView(MethodView):
+
+    decorators = [login_required]
+
+    post_args = {
+        'password': fields.String(
+            required=True, validate=[validate.Length(min=6, max=128)]),
+        'new_password': fields.String(
+            required=True, validate=[validate.Length(min=6, max=128)]),
+    }
+
+    def verify_password(self, password=None, new_password=None, **kwargs):
+        if not verify_and_update_password(password, current_user):
+            _abort(get_message('INVALID_PASSWORD')[0], 'password')
+        if password.data == new_password:
+            _abort(get_message('PASSWORD_IS_THE_SAME')[0], 'password')
+
+    def change_password(self, new_password=None, **kwargs):
+        after_this_request(_commit)
+        change_user_password(current_user._get_current_object(), new_password)
+
+    def success_response(self):
+        return jsonify({'message': get_message('PASSWORD_CHANGE')[0]})
+
+    @use_kwargs(post_args)
+    def post(self, **kwargs):
+        self.verify_password(**kwargs)
+        self.change_password(**kwargs)
+        return self.success_response()
+
+
+class SendConfirmationEmailView(MethodView):
+    """View function which sends confirmation instructions."""
+
+    # TODO: Is this needed? Flask-Security doesn't protect it...
+    # decorators = [login_required]
+
+    post_args = {
+        'email': fields.Email(required=True, validate=[user_exists]),
+    }
+
+    def get_user(self, email=None, **kwargs):
+        """Retrieve a user by the provided arguments."""
+        return current_datastore.get_user(email)
+
+    def verify(self, user):
+        if user.confirmed_at is not None:
+            _abort(get_message('ALREADY_CONFIRMED')[0])
+
+    def generate_confirmation_link(self, user):
+        return default_confirmation_link(user)
+
+    def send_confirmation_link(self, user):
+        if current_security.confirmable and config_value('SEND_REGISTER_EMAIL'):
+            confirmation_link, token = self.generate_confirmation_link(user)
+            send_mail(config_value('EMAIL_SUBJECT_REGISTER'), user.email,
+                    'welcome', user=user, confirmation_link=confirmation_link)
+            return token
+
+    def success_response(self, user):
+        return jsonify({'message': get_message('CONFIRMATION_REQUEST',
+            email=user.email)[0]})
+
+    @use_kwargs(post_args)
+    def post(self, **kwargs):
+        user = self.get_user(**kwargs)
+        self.verify(user)
+        self.send_confirmation_link(user)
+        return self.success_response(user)
+
+
+class ConfirmEmailView(MethodView):
+
+    def send_confirmation_link(self, user):
+        if current_security.confirmable and config_value('SEND_REGISTER_EMAIL'):
+            confirmation_link, token = self.generate_confirmation_link(user)
+            send_mail(config_value('EMAIL_SUBJECT_REGISTER'), user.email,
+                    'welcome', user=user, confirmation_link=confirmation_link)
+            return token
+
+    def get_user(self, token=None, **kwargs):
+        expired, invalid, user = confirm_email_token_status(token)
+
+        if not user or invalid:
+            _abort(get_message('INVALID_CONFIRMATION_TOKEN'))
+
+        already_confirmed = user is not None and user.confirmed_at is not None
+        if expired and not already_confirmed:
+            self.send_confirmation_link(user)
+            _abort(get_message('CONFIRMATION_EXPIRED',
+                email=user.email, within=_security.confirm_email_within))
+        return user
+
+    @use_kwargs({'token': fields.String(required=True)})
+    def post(self, **kwargs):
+        """View function which handles a email confirmation request."""
+        user = self.get_user(**kwargs)
+
+        if user != current_user:
+            logout_user()
+
+        if confirm_user(user):
+            after_this_request(_commit)
+            return jsonify({'message': get_message('EMAIL_CONFIRMED')[0]})
+        else:
+            return jsonify({'message': get_message('ALREADY_CONFIRMED')[0]})
+
+
+class RevokeSessionView(MethodView):
+
+    decorators = [login_required]
+
+    post_args = {
+        'sid_s': fields.String(required=True),
+    }
+
+    @use_kwargs(post_args)
+    def post(self, sid_s=None, **kwargs):
+        if SessionActivity.query.filter_by(
+                user_id=current_user.get_id(), sid_s=sid_s).count() == 1:
+            delete_session(sid_s=sid_s)
+            db.session.commit()
+            if not SessionActivity.is_current(sid_s=sid_s):
+                return jsonify({'message': 'Session {0} successfully removed.'.format(sid_s)})
+        else:
+            return jsonify({
+                'message': 'Unable to remove session {0}.'.format(sid_s)}), 400
