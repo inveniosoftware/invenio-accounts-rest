@@ -44,6 +44,7 @@ class InvenioAccountsREST(object):
         """Flask application initialization."""
         self.app = app
 
+        # TODO: Remove once invenio-accounts is merged
         # Register for the security email templates
         security_bp = Blueprint(
             'security', 'flask_security.core', template_folder='templates')

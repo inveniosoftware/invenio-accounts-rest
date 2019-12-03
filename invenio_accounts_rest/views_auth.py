@@ -12,30 +12,32 @@ from __future__ import absolute_import, print_function
 
 from collections import defaultdict
 
-from flask import Blueprint, after_this_request, current_app, \
-    jsonify, redirect, url_for
+from flask import Blueprint, after_this_request, current_app, jsonify, \
+    redirect, url_for
+from flask.helpers import get_root_path
 from flask.views import MethodView
 from flask_login import login_required
 from flask_security import current_user
 from flask_security.changeable import change_user_password
-from flask_security.confirmable import generate_confirmation_token, \
-    requires_confirmation, confirm_email_token_status, confirm_user
+from flask_security.confirmable import confirm_email_token_status, \
+    confirm_user, generate_confirmation_token, requires_confirmation
 from flask_security.decorators import anonymous_user_required
-from flask_security.recoverable import generate_reset_password_token, update_password
+from flask_security.recoverable import generate_reset_password_token, \
+    update_password
 from flask_security.registerable import register_user
 from flask_security.signals import user_registered
-from flask_security.utils import get_message, login_user, logout_user, \
-    verify_and_update_password, hash_password, config_value, send_mail
+from flask_security.utils import config_value, get_message, hash_password, \
+    login_user, logout_user, send_mail, verify_and_update_password
 from invenio_accounts.models import SessionActivity
 from invenio_accounts.sessions import delete_session
 from invenio_db import db
+from invenio_rest.errors import FieldError, RESTValidationError
 from webargs import ValidationError, fields, validate
 from webargs.flaskparser import FlaskParser as FlaskParserBase
 from werkzeug.local import LocalProxy
-from invenio_rest.errors import RESTValidationError, FieldError
-from flask.helpers import get_root_path
 
 from .serializers import role_to_dict
+from .utils import load_or_import_from_config
 
 # TODO: Move to "invenio_accouts.proxies"?
 current_datastore = LocalProxy(lambda: current_app.extensions['security'].datastore)
@@ -130,6 +132,15 @@ def unique_user_email(email):
             get_message('EMAIL_ALREADY_ASSOCIATED', email=email)[0])
 
 
+#
+# Utilities
+#
+def _get_user_payload(user):
+    user_payload_func = load_or_import_from_config(
+        'ACCOUNTS_REST_AUTH_USER_PAYLOAD', default=default_user_payload)
+    return user_payload_func(user)
+
+
 def default_user_payload(user):
     return {
         'id': user.id,
@@ -155,15 +166,14 @@ def default_reset_password_link(user):
     return reset_link, token
 
 
-def _abort(message, field=None, status=None):
-    if field:
-        raise RESTValidationError(FieldError(field, message))
+def _abort(message, field=None, errors=None):
+    if field or errors:
+        raise RESTValidationError(errors=errors or [FieldError(field, message)])
     raise RESTValidationError(description=message)
 
 def _commit(response=None):
     current_datastore.commit()
     return response
-
 
 
 class LoginView(MethodView):
@@ -179,7 +189,7 @@ class LoginView(MethodView):
 
     def success_response(self, user):
         """Return a successful login response."""
-        return jsonify(default_user_payload(user))
+        return jsonify(_get_user_payload(user))
 
     def verify_login(self, user, password=None, **kwargs):
         """Verify the login via password."""
@@ -208,17 +218,15 @@ class LoginView(MethodView):
         self.login_user(user)
         return self.success_response(user)
 
-
 class UserInfoView(MethodView):
 
     decorators = [login_required]
 
     def response(self, user):
-        return jsonify(default_user_payload(user))
+        return jsonify(_get_user_payload(user))
 
     def get(self):
         return self.response(current_user)
-
 
 class LogoutView(MethodView):
 
@@ -226,13 +234,12 @@ class LogoutView(MethodView):
         if current_user.is_authenticated:
             logout_user()
 
-    def sucess_respone(self):
+    def success_response(self):
         return jsonify({'message': 'User logged out.'})
 
     def post(self):
         self.logout_user()
-        return self.sucess_respone()
-
+        return self.success_response()
 
 class RegisterView(MethodView):
     """View to register a new user."""
@@ -270,16 +277,14 @@ class RegisterView(MethodView):
             after_this_request(_commit)
             login_user(user)
 
-    def sucess_response(self, user):
-        return jsonify(default_user_payload(user))
+    def success_response(self, user):
+        return jsonify(_get_user_payload(user))
 
     @use_kwargs(post_args)
     def post(self, **kwargs):
-        import wdb; wdb.set_trace()
         user = self.register_user(**kwargs)
         self.login_user(user)
-        return self.sucess_response(user)
-
+        return self.success_response(user)
 
 class ForgotPasswordView(MethodView):
 
@@ -382,8 +387,7 @@ class ChangePasswordView(MethodView):
 class SendConfirmationEmailView(MethodView):
     """View function which sends confirmation instructions."""
 
-    # TODO: Is this needed? Flask-Security doesn't protect it...
-    # decorators = [login_required]
+    decorators = [login_required]
 
     post_args = {
         'email': fields.Email(required=True, validate=[user_exists]),

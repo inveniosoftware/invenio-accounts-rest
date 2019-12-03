@@ -29,6 +29,10 @@ from .utils import deny_all
 ACCOUNTS_REST_AUTH_VIEWS = True
 """Enable REST API authentication views."""
 
+ACCOUNTS_REST_AUTH_USER_PAYLOAD = \
+    'invenio_accounts_rest.views_auth.default_user_payload'
+"""Function for User paylaod."""
+
 ACCOUNTS_REST_READ_ROLE_PERMISSION_FACTORY = deny_all
 """Default get role permission factory: reject any request."""
 
