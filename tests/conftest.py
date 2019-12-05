@@ -42,7 +42,6 @@ from flask_security.utils import hash_password
 from invenio_access import InvenioAccess
 from invenio_access.models import ActionUsers
 from invenio_access.permissions import superuser_access
-from invenio_rest import InvenioREST
 from invenio_accounts import InvenioAccounts
 from invenio_accounts import InvenioAccountsREST as BaseInvenioAccountsREST
 from invenio_accounts.models import Role, User
@@ -51,6 +50,7 @@ from invenio_db import db as db_
 from invenio_oauth2server import InvenioOAuth2Server, \
     InvenioOAuth2ServerREST, current_oauth2server
 from invenio_oauth2server.models import Token
+from invenio_rest import InvenioREST
 from six import iteritems
 from sqlalchemy_utils.functions import create_database, database_exists
 

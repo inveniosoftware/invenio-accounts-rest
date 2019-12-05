@@ -26,8 +26,6 @@
 
 from __future__ import absolute_import, print_function
 
-from flask import current_app, Blueprint
-
 from . import config
 from .utils import load_or_import_from_config
 
@@ -43,13 +41,6 @@ class InvenioAccountsREST(object):
     def init_app(self, app):
         """Flask application initialization."""
         self.app = app
-
-        # TODO: Remove once invenio-accounts is merged
-        # Register for the security email templates
-        security_bp = Blueprint(
-            'security', 'flask_security.core', template_folder='templates')
-        app.register_blueprint(security_bp)
-
         self.init_config(app)
         app.extensions['invenio-accounts-rest'] = self
 
