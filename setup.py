@@ -32,23 +32,16 @@ readme = open('README.rst').read()
 history = open('CHANGES.rst').read()
 
 tests_require = [
-    'check-manifest>=0.25',
-    'coverage>=4.0',
-    'isort>=4.2.2',
-    'pydocstyle>=1.0.0',
-    'pytest-cache>=1.0',
-    'pytest-cov>=1.8.0',
-    'pytest-pep8>=1.0.6',
-    'pytest>=2.8.0',
-    'Flask-Testing',
-    'mock',
-    'jsonpatch',
+    'pytest-invenio>=1.4.0',
+    'Flask-Testing>=0.8.0',
+    'mock>=1.3.0',
+    'jsonpatch>=1.28',
     'responses>=0.5.1',
 ]
 
 extras_require = {
     'docs': [
-        'Sphinx>=1.4.2',
+        'Sphinx>=3.3.1',
     ],
     'tests': tests_require,
     'userprofiles': [
@@ -65,9 +58,9 @@ setup_requires = [
 ]
 
 install_requires = [
-    'invenio-accounts>=1.0.0',
+    'invenio-accounts>=1.3.0',
     'invenio-db>=1.0.0,<1.1.0',
-    'invenio-rest>=1.0.0',
+    'invenio-rest>=1.2.1',
     'invenio-access>=1.0.0',
     'invenio-oauth2server>=1.0.0',
 ]

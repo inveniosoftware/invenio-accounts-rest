@@ -25,8 +25,8 @@
  Invenio-Accounts-REST
 =======================
 
-.. image:: https://img.shields.io/travis/inveniosoftware/invenio-accounts-rest.svg
-        :target: https://travis-ci.org/inveniosoftware/invenio-accounts-rest
+.. image:: https://github.com/inveniosoftware/invenio-accounts-rest/workflows/CI/badge.svg
+        :target: https://github.com/inveniosoftware/invenio-accounts-rest/actions
 
 .. image:: https://img.shields.io/coveralls/inveniosoftware/invenio-accounts-rest.svg
         :target: https://coveralls.io/r/inveniosoftware/invenio-accounts-rest

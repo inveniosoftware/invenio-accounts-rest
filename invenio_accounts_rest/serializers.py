@@ -208,6 +208,7 @@ def users_list_serializer_factory(user_to_dict):
         return response
     return serializer
 
+
 users_list_serializer = users_list_serializer_factory(user_to_dict)
 users_with_profile_list_serializer = users_list_serializer_factory(
     user_with_profile_to_dict)
