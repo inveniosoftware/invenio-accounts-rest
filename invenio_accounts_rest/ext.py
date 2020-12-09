@@ -26,11 +26,8 @@
 
 from __future__ import absolute_import, print_function
 
-from flask import current_app
-
 from . import config
 from .utils import load_or_import_from_config
-from .views import blueprint
 
 
 class InvenioAccountsREST(object):
@@ -45,7 +42,6 @@ class InvenioAccountsREST(object):
         """Flask application initialization."""
         self.app = app
         self.init_config(app)
-        app.register_blueprint(blueprint)
         app.extensions['invenio-accounts-rest'] = self
 
     def read_role_permission_factory(self, **kwargs):

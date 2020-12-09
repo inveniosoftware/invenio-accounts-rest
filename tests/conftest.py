@@ -43,16 +43,19 @@ from invenio_access import InvenioAccess
 from invenio_access.models import ActionUsers
 from invenio_access.permissions import superuser_access
 from invenio_accounts import InvenioAccounts
+from invenio_accounts import InvenioAccountsREST as BaseInvenioAccountsREST
 from invenio_accounts.models import Role, User
 from invenio_db import InvenioDB
 from invenio_db import db as db_
 from invenio_oauth2server import InvenioOAuth2Server, \
     InvenioOAuth2ServerREST, current_oauth2server
 from invenio_oauth2server.models import Token
+from invenio_rest import InvenioREST
 from six import iteritems
 from sqlalchemy_utils.functions import create_database, database_exists
 
 from invenio_accounts_rest import InvenioAccountsREST
+from invenio_accounts_rest.views_auth import create_blueprint
 
 
 @pytest.fixture()
@@ -141,6 +144,35 @@ def accounts_rest_permission_factory():
 def with_profiles(app):
     """Return True if invenio-userprofiles is installed, else False."""
     return 'invenio-userprofiles' in app.extensions
+
+
+
+@pytest.yield_fixture()
+def api():
+    """Flask application fixture."""
+    instance_path = tempfile.mkdtemp()
+
+    api_app = Flask('test-api-app', instance_path=instance_path)
+    api_app.config.update(
+        SQLALCHEMY_DATABASE_URI=os.environ.get(
+            'SQLALCHEMY_DATABASE_URI', 'sqlite:///test.db'),
+        SERVER_NAME='localhost',
+        TESTING=True,
+    )
+    InvenioDB(api_app)
+    InvenioAccess(api_app)
+    InvenioREST(api_app)
+    BaseInvenioAccountsREST(api_app)
+    InvenioAccountsREST(api_app)
+    api_app.register_blueprint(create_blueprint(api_app))
+
+    with api_app.app_context():
+        db_.create_all()
+
+    yield api_app
+
+    with api_app.app_context():
+        db_.drop_all()
 
 
 @pytest.yield_fixture()
